@@ -7,6 +7,16 @@
 #include "ss/policydb.h"
 #include "linux/key.h"
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 1, 0)
+/* selinux_inode() doesn't exist on 4.4; inode->i_security *is* the
+ * struct inode_security_struct (see security/selinux/hooks.c). */
+struct inode_security_struct;
+static inline struct inode_security_struct *selinux_inode(const struct inode *inode)
+{
+	return inode->i_security;
+}
+#endif
+
 /**
  * list_count_nodes - count the number of nodes in a list
  * @head: the head of the list

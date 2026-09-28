@@ -7,6 +7,7 @@
 #include <linux/sched.h>
 #endif
 #include <linux/uaccess.h>
+#include <linux/syscalls.h>
 #include "klog.h" // IWYU pragma: keep
 #include "kernel_compat.h"
 
@@ -102,3 +103,28 @@ long ksu_strncpy_from_user_nofault(char *dst, const void __user *unsafe_addr,
 	return strncpy_from_user(dst, unsafe_addr, count);
 #endif
 }
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 9, 0)
+/* path_umount() doesn't exist on 4.4. Implement it via the umount syscall.
+ * Like the callers expect, this consumes the caller's path reference
+ * (balances their kern_path()). */
+__weak int path_umount(struct path *path, int flags)
+{
+	char buf[256];
+	char *usermnt;
+	mm_segment_t old_fs;
+	int ret = -ENOENT;
+
+	usermnt = d_path(path, buf, sizeof(buf));
+	if (IS_ERR(usermnt))
+		goto out;
+
+	old_fs = get_fs();
+	set_fs(KERNEL_DS);
+	ret = sys_umount((char __user *)usermnt, flags);
+	set_fs(old_fs);
+out:
+	path_put(path);
+	return ret;
+}
+#endif
