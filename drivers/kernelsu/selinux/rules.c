@@ -18,10 +18,14 @@
 
 static struct policydb *get_policydb(void)
 {
-	struct policydb *db;
+#ifdef KSU_COMPAT_HAS_SELINUX_STATE
 	struct selinux_policy *policy = selinux_state.policy;
-	db = &policy->policydb;
-	return db;
+	return &policy->policydb;
+#else
+	/* 4.4 predates selinux_state: single global policy database. */
+	extern struct policydb policydb;
+	return &policydb;
+#endif
 }
 
 static DEFINE_MUTEX(ksu_rules);
@@ -210,10 +214,17 @@ static void reset_avc_cache()
 	selnl_notify_policyload(0);
 	selinux_status_update_policyload(0);
 #else
+#ifdef KSU_COMPAT_HAS_SELINUX_STATE
 	struct selinux_avc *avc = selinux_state.avc;
 	avc_ss_reset(avc, 0);
 	selnl_notify_policyload(0);
 	selinux_status_update_policyload(&selinux_state, 0);
+#else
+	/* 4.4: global AVC, single-argument policyload helpers. */
+	avc_ss_reset(0);
+	selnl_notify_policyload(0);
+	selinux_status_update_policyload(0);
+#endif
 #endif
 	selinux_xfrm_notify_policyload();
 }
